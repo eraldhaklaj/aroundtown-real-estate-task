@@ -47,7 +47,7 @@ export function LoginPage() {
             <HouseIcon className="size-5" />
           </div>
           <CardTitle className="text-xl">Sign in to KiezHomes</CardTitle>
-          <CardDescription>Sign in for unlimited questions to the AI property assistant.</CardDescription>
+          <CardDescription>Sign in to ask the AI property assistant more questions.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
           <form onSubmit={handleSubmit} className="space-y-4" noValidate>

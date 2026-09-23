@@ -40,9 +40,9 @@ export function Navbar() {
             Listings
           </NavLink>
           {user?.role === "agent" && (
-            <NavLink to="/agent/generate" className={navLinkClass}>
+            <NavLink to="/agent/generate" className={navLinkClass} aria-label="Write listing">
               <WandSparklesIcon className="size-4" />
-              <span>Write listing</span>
+              <span className="hidden whitespace-nowrap sm:inline">Write listing</span>
             </NavLink>
           )}
         </nav>

@@ -7,6 +7,8 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: { '@': path.resolve(import.meta.dirname, './src') },
+    // One React copy for the whole tree (workspace hoisting can otherwise load two).
+    dedupe: ['react', 'react-dom'],
   },
   server: {
     port: 5173,
