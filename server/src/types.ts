@@ -79,4 +79,6 @@ export interface Listing {
   neighborhood: Neighborhood;
   agentId: string;
   listedAt: string;
+  /** The listing agent can switch the AI Q&A off. Undefined means on. */
+  qaEnabled?: boolean;
 }

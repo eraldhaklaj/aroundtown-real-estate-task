@@ -1,43 +1,117 @@
 import type Anthropic from "@anthropic-ai/sdk";
-import { Router, type Response } from "express";
-import { anthropic, describeAiError, FALLBACK_OPTIONS, MODEL, publicAiErrorMessage } from "../ai/client.js";
-import { GENERATED_DRAFT_JSON_SCHEMA, LISTING_GENERATOR_SYSTEM_PROMPT, propertyQaSystemPrompt } from "../ai/prompts.js";
-import { consumeFreeQuestion, refundFreeQuestion } from "../data/anonQuota.js";
+import { Router, type Request, type Response } from "express";
+import {
+  anthropic,
+  describeAiError,
+  GENERATOR_MODEL,
+  isRetryable,
+  LONG_PROMPT_CHARS,
+  publicAiErrorMessage,
+  QA_FALLBACK_MODEL,
+  QA_MODEL,
+  qaRequest,
+} from "../ai/client.js";
+import {
+  GENERATED_DRAFT_JSON_SCHEMA,
+  LISTING_GENERATOR_SYSTEM_PROMPT,
+  NOT_IN_LISTING,
+  propertyQaSystemPrompt,
+} from "../ai/prompts.js";
+import { type QaCaller, remainingQuestions, reserveQuestion } from "../ai/qaLimits.js";
+import { rateAnswer, recordAnswer, RETENTION_DAYS } from "../data/qaLog.js";
+import { recordSpend, spendCapReached } from "../data/spend.js";
 import { findListing } from "../data/store.js";
 import { log } from "../log.js";
 import { requireRole } from "../middleware/auth.js";
 import { HttpError } from "../middleware/error.js";
-import { aiLimiter } from "../middleware/rateLimit.js";
-import { AskSchema, GeneratedDraftSchema, GenerateListingSchema, ListingIdSchema, parse } from "../validation.js";
+import { generatorLimiter } from "../middleware/rateLimit.js";
+import type { Listing } from "../types.js";
+import {
+  AnswerIdSchema,
+  AskSchema,
+  FeedbackSchema,
+  GeneratedDraftSchema,
+  GenerateListingSchema,
+  ListingIdSchema,
+  parse,
+} from "../validation.js";
 
 export const aiRouter = Router();
 
-type StreamEvent = { type: "delta"; text: string } | { type: "done" } | { type: "error"; message: string };
+type StreamEvent =
+  | { type: "delta"; text: string }
+  | { type: "done"; answerId: string | null; missingInfo: boolean }
+  | { type: "error"; message: string };
 
 function sendEvent(res: Response, event: StreamEvent) {
   res.write(`data: ${JSON.stringify(event)}\n\n`);
 }
 
+function loadListing(req: Request): Listing {
+  const listing = findListing(parse(ListingIdSchema, req.params.id));
+  if (!listing) throw new HttpError(404, "Listing not found");
+  return listing;
+}
+
+/** Who is asking, which usage buckets they count against, and whether they're exempt (agent on their own listing). */
+function qaCaller(req: Request, listing: Listing): QaCaller {
+  if (req.user) {
+    return {
+      tier: "user",
+      keys: [`user:${req.user.id}`],
+      exempt: req.user.role === "agent" && listing.agentId === req.user.id,
+    };
+  }
+  return { tier: "anon", keys: [`anon:${req.anon!.id}`, `ip:${req.ip ?? "unknown"}`], exempt: false };
+}
+
+function assertQaAvailable(listing: Listing) {
+  if (listing.qaEnabled === false) {
+    throw new HttpError(403, "The agent has turned off AI questions for this listing. Please contact the agent directly.", "qa_disabled");
+  }
+  if (spendCapReached()) {
+    throw new HttpError(503, "The AI assistant is paused for today. Please contact the agent directly.", "unavailable", 3600);
+  }
+}
+
+/** What the chat panel needs before the first question: is Q&A on, and how many questions are left. */
+aiRouter.get("/listings/:id/status", (req, res) => {
+  const listing = loadListing(req);
+  const caller = qaCaller(req, listing);
+  res.json({
+    qaEnabled: listing.qaEnabled !== false,
+    available: !spendCapReached(),
+    remaining: remainingQuestions(caller, listing.id),
+    retentionDays: RETENTION_DAYS,
+  });
+});
+
 /**
  * Property Q&A. Streams the answer as Server-Sent Events.
  * The listing is loaded server-side from the id; the client only sends the question and recent history.
- * Signed-in users ask freely (rate-limited); guests get one free question, then must sign in.
  */
-aiRouter.post("/listings/:id/ask", aiLimiter, async (req, res) => {
-  const listingId = parse(ListingIdSchema, req.params.id);
+aiRouter.post("/listings/:id/ask", async (req, res) => {
+  const listing = loadListing(req);
   const { question, history } = parse(AskSchema, req.body);
-  const listing = findListing(listingId);
-  if (!listing) throw new HttpError(404, "Listing not found");
+  assertQaAvailable(listing);
 
-  // Guests must present an existing "a" cookie (one issued on this request doesn't count),
-  // and the question is reserved before calling the model so parallel requests can't overspend.
-  const guestId = req.user ? null : req.anon!.id;
-  if (guestId && (req.anon!.isNew || !consumeFreeQuestion(guestId))) {
-    throw new HttpError(401, "You've used your free question. Sign in to keep asking.", "login_required");
+  const caller = qaCaller(req, listing);
+  // Guests must present an existing "a" cookie: one issued on this very request doesn't get free questions.
+  if (caller.tier === "anon" && req.anon!.isNew) {
+    throw new HttpError(429, "Please reload the page and try again.", "login_required", 1);
   }
-  const who = req.user?.id ?? guestId!;
+  const reserved = reserveQuestion(caller, listing.id);
+  if (!reserved.ok) {
+    const { code, message, retryAfterSeconds } = reserved.denial;
+    log.info("ai.ask_limited", { caller: caller.keys[0], listingId: listing.id, code });
+    throw new HttpError(429, message, code, retryAfterSeconds);
+  }
+  const { reservation } = reserved;
 
-  const messages: Anthropic.Beta.BetaMessageParam[] = [...history, { role: "user", content: question }];
+  const system = propertyQaSystemPrompt(listing);
+  const messages: Anthropic.MessageParam[] = [...history, { role: "user", content: question }];
+  // Very long listings go straight to the stronger model; otherwise Haiku first, Sonnet if Haiku fails.
+  const models = system.length > LONG_PROMPT_CHARS ? [QA_FALLBACK_MODEL] : [QA_MODEL, QA_FALLBACK_MODEL];
 
   res.writeHead(200, {
     "Content-Type": "text/event-stream; charset=utf-8",
@@ -45,76 +119,106 @@ aiRouter.post("/listings/:id/ask", aiLimiter, async (req, res) => {
     Connection: "keep-alive",
   });
 
-  const stream = anthropic.beta.messages.stream({
-    model: MODEL,
-    max_tokens: 2000,
-    system: propertyQaSystemPrompt(listing),
-    messages,
-    output_config: { effort: "low" },
-    ...FALLBACK_OPTIONS,
-  });
-
   // Stop paying for tokens nobody will read if the user navigates away or presses Stop.
   let clientGone = false;
+  let current: ReturnType<typeof anthropic.messages.stream> | null = null;
   res.on("close", () => {
     if (!res.writableFinished) {
       clientGone = true;
-      stream.abort();
+      current?.abort();
     }
   });
 
+  let answer = "";
   try {
-    for await (const event of stream) {
-      if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
-        sendEvent(res, { type: "delta", text: event.delta.text });
+    let final: Anthropic.Message | null = null;
+    for (const model of models) {
+      current = anthropic.messages.stream(qaRequest(model, system, messages));
+      try {
+        for await (const event of current) {
+          if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
+            answer += event.delta.text;
+            sendEvent(res, { type: "delta", text: event.delta.text });
+          }
+        }
+        final = await current.finalMessage();
+        break;
+      } catch (err) {
+        // Fall back only if nothing reached the user yet and the error is transient.
+        if (clientGone || answer || !isRetryable(err) || model === models.at(-1)) throw err;
+        log.warn("ai.ask_fallback", { from: model, to: models.at(-1), ...describeAiError(err) });
       }
     }
-    const final = await stream.finalMessage();
+    if (!final) throw new Error("no response");
+
+    recordSpend(final.model, final.usage);
+    reservation.addTokens(final.usage.input_tokens + final.usage.output_tokens);
+
+    if (final.stop_reason === "refusal") {
+      sendEvent(res, { type: "error", message: "The assistant can't help with that. Try asking something about this property." });
+      return;
+    }
+    if (final.stop_reason === "max_tokens") sendEvent(res, { type: "delta", text: "…" });
+
+    const missingInfo = answer.replace(/’/g, "'").toLowerCase().includes(NOT_IN_LISTING.toLowerCase().replace(/\.$/, ""));
+    // Agents testing their own listing don't show up in its stats.
+    const record = caller.exempt
+      ? null
+      : recordAnswer({ listingId: listing.id, caller: caller.keys[0], question, answer, model: final.model, missingInfo });
+
     log.info("ai.ask", {
-      caller: who,
-      listingId,
+      caller: caller.keys[0],
+      listingId: listing.id,
       model: final.model,
       stopReason: final.stop_reason,
       inputTokens: final.usage.input_tokens,
       outputTokens: final.usage.output_tokens,
+      missingInfo,
     });
-    if (final.stop_reason === "refusal") {
-      sendEvent(res, { type: "error", message: "The assistant can't help with that. Try asking something about this property." });
-    } else {
-      sendEvent(res, { type: "done" });
-    }
+    sendEvent(res, { type: "done", answerId: record?.id ?? null, missingInfo });
   } catch (err) {
     if (clientGone) {
-      log.info("ai.ask_cancelled", { caller: who, listingId });
+      log.info("ai.ask_cancelled", { caller: caller.keys[0], listingId: listing.id });
       return;
     }
-    if (guestId) refundFreeQuestion(guestId);
-    log.error("ai.ask_failed", { caller: who, listingId, ...describeAiError(err) });
+    reservation.refund();
+    log.error("ai.ask_failed", { caller: caller.keys[0], listingId: listing.id, ...describeAiError(err) });
     sendEvent(res, { type: "error", message: publicAiErrorMessage(err) });
   } finally {
+    reservation.release();
     res.end();
   }
 });
 
-/** Smart Listing Generator (agents only). Returns a structured draft; nothing is saved until the agent confirms. */
-aiRouter.post("/generate-listing", requireRole("agent"), aiLimiter, async (req, res) => {
-  const details = parse(GenerateListingSchema, req.body);
+/** Thumbs up/down on an answer. Only the person who got the answer can rate it. */
+aiRouter.post("/answers/:id/feedback", (req, res) => {
+  const id = parse(AnswerIdSchema, req.params.id);
+  const { rating } = parse(FeedbackSchema, req.body);
+  const caller = req.user ? `user:${req.user.id}` : `anon:${req.anon!.id}`;
+  if (!rateAnswer(id, caller, rating)) throw new HttpError(404, "Answer not found");
+  res.status(204).end();
+});
 
-  let response: Anthropic.Beta.BetaMessage;
+/** Smart Listing Generator (agents only). Returns a structured draft; nothing is saved until the agent confirms. */
+aiRouter.post("/generate-listing", requireRole("agent"), generatorLimiter, async (req, res) => {
+  const details = parse(GenerateListingSchema, req.body);
+  if (spendCapReached()) throw new HttpError(503, "AI features are paused for today. Please try again tomorrow.", "unavailable", 3600);
+
+  let response: Anthropic.Message;
   try {
-    response = await anthropic.beta.messages.create({
-      model: MODEL,
+    response = await anthropic.messages.create({
+      model: GENERATOR_MODEL,
       max_tokens: 4000,
       system: LISTING_GENERATOR_SYSTEM_PROMPT,
       messages: [{ role: "user", content: `<property_details>\n${JSON.stringify(details, null, 2)}\n</property_details>` }],
       output_config: { effort: "low", format: { type: "json_schema", schema: GENERATED_DRAFT_JSON_SCHEMA } },
-      ...FALLBACK_OPTIONS,
     });
   } catch (err) {
     log.error("ai.generate_failed", { userId: req.user!.id, ...describeAiError(err) });
     throw new HttpError(502, publicAiErrorMessage(err));
   }
 
+  recordSpend(response.model, response.usage);
   log.info("ai.generate", {
     userId: req.user!.id,
     model: response.model,

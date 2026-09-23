@@ -5,19 +5,15 @@ import type { PublicUser } from "@/lib/types";
 interface AuthState {
   /** null for anonymous guests */
   user: PublicUser | null;
-  /** Guests only: free AI questions left (null when signed in or unknown) */
-  freeQuestionsLeft: number | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
-  refresh: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthState | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<PublicUser | null>(null);
-  const [freeQuestionsLeft, setFreeQuestionsLeft] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
 
   // Sessions live in httpOnly cookies ("token" for users, "a" for guests), so ask the server who we are.
@@ -26,10 +22,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const me = await api.me();
       setUser(me.user);
-      setFreeQuestionsLeft(me.freeQuestionsLeft);
     } catch {
       setUser(null);
-      setFreeQuestionsLeft(null);
     }
   }, []);
 
@@ -40,7 +34,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = useCallback(async (email: string, password: string) => {
     const { user } = await api.login(email, password);
     setUser(user);
-    setFreeQuestionsLeft(null);
   }, []);
 
   const logout = useCallback(async () => {
@@ -48,10 +41,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await refresh();
   }, [refresh]);
 
-  const value = useMemo(
-    () => ({ user, freeQuestionsLeft, loading, login, logout, refresh }),
-    [user, freeQuestionsLeft, loading, login, logout, refresh],
-  );
+  const value = useMemo(() => ({ user, loading, login, logout }), [user, loading, login, logout]);
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 

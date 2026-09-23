@@ -11,18 +11,22 @@ import {
 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, useParams } from "react-router";
+import { AgentQaPanel } from "@/components/AgentQaPanel";
+import { ContactAgentButton } from "@/components/ContactAgentButton";
 import { ImageGallery } from "@/components/ImageGallery";
 import { PropertyChat } from "@/components/PropertyChat";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useAuth } from "@/context/AuthContext";
 import { api, ApiError } from "@/lib/api";
 import { formatEur, formatPrice, TYPE_LABELS } from "@/lib/format";
 import type { Listing } from "@/lib/types";
 
 export function ListingDetailPage() {
   const { id = "" } = useParams();
+  const { user } = useAuth();
   const [listing, setListing] = useState<Listing | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -62,6 +66,7 @@ export function ListingDetailPage() {
   }
 
   const n = listing.neighborhood;
+  const isOwner = user?.role === "agent" && listing.agentId === user.id;
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-6">
@@ -95,11 +100,14 @@ export function ListingDetailPage() {
                   </div>
                 )}
               </div>
-              <Button asChild className="lg:hidden">
-                <a href="#ask">
-                  <SparklesIcon /> Ask the AI assistant
-                </a>
-              </Button>
+              <div className="flex flex-wrap gap-2">
+                <ContactAgentButton listing={listing} label="Ask the agent directly" />
+                <Button asChild className="lg:hidden">
+                  <a href="#ask">
+                    <SparklesIcon /> Ask the AI
+                  </a>
+                </Button>
+              </div>
             </div>
           </section>
 
@@ -192,8 +200,9 @@ export function ListingDetailPage() {
           </section>
         </div>
 
-        <aside className="lg:sticky lg:top-20 lg:self-start">
-          <PropertyChat key={listing.id} listing={listing} />
+        <aside className="space-y-4 lg:sticky lg:top-20 lg:self-start">
+          {isOwner && <AgentQaPanel listing={listing} onQaChange={(qaEnabled) => setListing({ ...listing, qaEnabled })} />}
+          <PropertyChat key={`${listing.id}-${listing.qaEnabled !== false}`} listing={listing} />
         </aside>
       </div>
     </div>

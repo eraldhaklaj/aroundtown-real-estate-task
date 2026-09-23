@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "tsx watch --env-file-if-exists=../.env src/index.ts",
     "start": "NODE_ENV=production tsx --env-file-if-exists=../.env src/index.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "eval": "tsx --env-file-if-exists=../.env scripts/qa-eval.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.128.0",

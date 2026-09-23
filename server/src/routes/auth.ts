@@ -1,8 +1,8 @@
 import bcrypt from "bcryptjs";
 import { Router } from "express";
-import { freeQuestionsLeft } from "../data/anonQuota.js";
 import { findUserByEmail } from "../data/users.js";
 import { log } from "../log.js";
+import { maskEmail } from "../pii.js";
 import { clearUserSession, issueUserSession, toPublicUser } from "../middleware/auth.js";
 import { loginLimiter } from "../middleware/rateLimit.js";
 import { LoginSchema, parse } from "../validation.js";
@@ -18,7 +18,7 @@ authRouter.post("/login", loginLimiter, async (req, res) => {
   const passwordOk = await bcrypt.compare(password, user?.passwordHash ?? DUMMY_HASH);
 
   if (!user || !passwordOk) {
-    log.warn("auth.login_failed", { email, ip: req.ip });
+    log.warn("auth.login_failed", { email: maskEmail(email), ip: req.ip });
     res.status(401).json({ error: "Invalid email or password" });
     return;
   }
@@ -34,11 +34,7 @@ authRouter.post("/logout", (_req, res) => {
   res.status(204).end();
 });
 
-/** Who is calling: a signed-in user, or a guest and how many free AI questions they have left. */
+/** The signed-in user, or null for guests. The first call also gives a new guest their anonymous "a" session. */
 authRouter.get("/me", (req, res) => {
-  if (req.user) {
-    res.json({ user: req.user, freeQuestionsLeft: null });
-    return;
-  }
-  res.json({ user: null, freeQuestionsLeft: freeQuestionsLeft(req.anon!.id) });
+  res.json({ user: req.user ?? null });
 });

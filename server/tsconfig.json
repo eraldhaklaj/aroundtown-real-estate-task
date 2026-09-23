@@ -1,7 +1,9 @@
 {
   "compilerOptions": {
     "target": "es2023",
-    "lib": ["ES2023"],
+    "lib": [
+      "ES2023"
+    ],
     "module": "nodenext",
     "moduleResolution": "nodenext",
     "strict": true,
@@ -9,7 +11,12 @@
     "skipLibCheck": true,
     "noEmit": true,
     "verbatimModuleSyntax": true,
-    "types": ["node"]
+    "types": [
+      "node"
+    ]
   },
-  "include": ["src"]
+  "include": [
+    "src",
+    "scripts"
+  ]
 }

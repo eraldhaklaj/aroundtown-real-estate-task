@@ -2,7 +2,8 @@ import { z } from "zod";
 import { HttpError } from "./middleware/error.js";
 
 export const QUESTION_MAX_CHARS = 500;
-export const HISTORY_MAX_MESSAGES = 6;
+/** Last 4 question/answer turns are sent to the model as context. */
+export const HISTORY_MAX_MESSAGES = 8;
 
 /** Parses untrusted input, turning validation failures into a 400 with a safe message. */
 export function parse<T extends z.ZodType>(schema: T, data: unknown): z.output<T> {
@@ -21,7 +22,8 @@ export const LoginSchema = z.object({
 
 export const ListingIdSchema = z.string().regex(/^lst-[a-z0-9]{3,12}$/, "Invalid listing id");
 
-export const AskSchema = z.object({
+// Strict: unknown fields (e.g. attachments or images) are rejected, and content must be plain text.
+export const AskSchema = z.strictObject({
   question: z
     .string()
     .trim()
@@ -29,7 +31,7 @@ export const AskSchema = z.object({
     .max(QUESTION_MAX_CHARS, `Questions are limited to ${QUESTION_MAX_CHARS} characters`),
   history: z
     .array(
-      z.object({
+      z.strictObject({
         role: z.enum(["user", "assistant"]),
         content: z.string().trim().min(1).max(2000),
       }),
@@ -41,6 +43,12 @@ export const AskSchema = z.object({
     )
     .default([]),
 });
+
+export const AnswerIdSchema = z.uuid("Invalid answer id");
+
+export const FeedbackSchema = z.strictObject({ rating: z.enum(["up", "down"]) });
+
+export const QaToggleSchema = z.strictObject({ enabled: z.boolean() });
 
 const PropertyTypeSchema = z.enum(["apartment", "house", "townhouse", "penthouse", "loft"]);
 const StatusSchema = z.enum(["sale", "rent"]);

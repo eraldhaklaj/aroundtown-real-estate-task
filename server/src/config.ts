@@ -4,7 +4,12 @@ const EnvSchema = z.object({
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
   PORT: z.coerce.number().int().positive().default(3001),
   ANTHROPIC_API_KEY: z.string().min(1, "ANTHROPIC_API_KEY is required"),
-  ANTHROPIC_MODEL: z.string().min(1).default("claude-opus-5"),
+  // Q&A: fast, cheap default model plus a stronger fallback (errors, very long listings).
+  QA_MODEL: z.string().min(1).default("claude-haiku-4-5-20251001"),
+  QA_FALLBACK_MODEL: z.string().min(1).default("claude-sonnet-5"),
+  GENERATOR_MODEL: z.string().min(1).default("claude-sonnet-5"),
+  // Global kill switch: AI features pause for the rest of the UTC day once estimated spend hits this.
+  AI_DAILY_SPEND_CAP_USD: z.coerce.number().positive().default(5),
   JWT_SECRET: z.string().min(32, "JWT_SECRET must be at least 32 characters"),
 });
 

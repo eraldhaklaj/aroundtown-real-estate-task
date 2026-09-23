@@ -5,10 +5,12 @@ import { log } from "../log.js";
 export class HttpError extends Error {
   status: number;
   code?: string;
-  constructor(status: number, message: string, code?: string) {
+  retryAfterSeconds?: number;
+  constructor(status: number, message: string, code?: string, retryAfterSeconds?: number) {
     super(message);
     this.status = status;
     this.code = code;
+    this.retryAfterSeconds = retryAfterSeconds;
   }
 }
 
@@ -44,6 +46,7 @@ export function errorHandler(err: unknown, req: Request, res: Response, _next: N
     res.end();
     return;
   }
+  if (err instanceof HttpError && err.retryAfterSeconds !== undefined) res.setHeader("Retry-After", String(err.retryAfterSeconds));
   res.status(status).json(code ? { error: message, code } : { error: message });
 }
 

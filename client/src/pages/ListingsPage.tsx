@@ -52,7 +52,7 @@ export function ListingsPage() {
     <div className="mx-auto max-w-7xl px-4 py-6 sm:py-8">
       <div className="mb-6 space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Homes in Berlin</h1>
-        <p className="text-muted-foreground">Open any listing and ask the AI assistant about it: commute, costs, family fit, and more.</p>
+        <p className="text-muted-foreground">Open any listing and ask the AI assistant about it: costs, size, transit, availability and more.</p>
       </div>
 
       <div className="mb-6 grid gap-2 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_repeat(4,auto)]">

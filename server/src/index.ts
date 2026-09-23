@@ -48,5 +48,5 @@ if (config.isProd && existsSync(clientDist)) {
 app.use(errorHandler);
 
 app.listen(config.PORT, () => {
-  log.info("server.started", { port: config.PORT, env: config.NODE_ENV, model: config.ANTHROPIC_MODEL });
+  log.info("server.started", { port: config.PORT, env: config.NODE_ENV, qaModel: config.QA_MODEL, qaFallbackModel: config.QA_FALLBACK_MODEL });
 });
