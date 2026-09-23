@@ -31,8 +31,8 @@ Other scripts:
 | Who | How | Can do |
 |-----|-----|--------|
 | Guest | No login. Gets an anonymous session automatically (`a` cookie) | Browse all listings. **3 free AI questions per property, 10 per day**, then asked to sign in |
-| Buyer | `buyer@demo.com` / `Buyer123!` (`token` cookie) | Browse, Property Q&A with higher limits |
-| Agent | `agent@demo.com` / `Agent123!` (`token` cookie) | Everything above, plus on their own listings: switch Q&A on or off, see question stats and "missing info" questions, test without limits. Also the Smart listing writer |
+| Buyer | `buyer@demo.com` / `password123` (`token` cookie) | Browse, Property Q&A with higher limits |
+| Agent | `agent@demo.com` / `password123` (`token` cookie) | Everything above, plus on their own listings: switch Q&A on or off, see question stats and "missing info" questions, test without limits. Also the Smart listing writer |
 
 There's no sign-up (users are hard-coded). The login page has "Use Buyer" / "Use Agent" buttons that fill in these credentials.
 

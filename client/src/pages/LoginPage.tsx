@@ -9,8 +9,8 @@ import { Separator } from "@/components/ui/separator";
 import { useAuth } from "@/context/AuthContext";
 
 const DEMO_ACCOUNTS = [
-  { label: "Buyer", email: "buyer@demo.com", password: "Buyer123!" },
-  { label: "Agent", email: "agent@demo.com", password: "Agent123!" },
+  { label: "Buyer", email: "buyer@demo.com", password: "password123" },
+  { label: "Agent", email: "agent@demo.com", password: "password123" },
 ];
 
 export function LoginPage() {

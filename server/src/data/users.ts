@@ -8,14 +8,14 @@ export const users: User[] = [
     email: "buyer@demo.com",
     name: "Sam Becker",
     role: "user",
-    passwordHash: "$2b$10$I4wiyNdK0GHxWyPTAGJGmue3uob4rLDBqdrf9GYR5S8dVPSCYYLcC", // Buyer123!
+    passwordHash: "$2b$10$JiYqLRjWMTHGoWJnqBEHUeLMm756zJsdrioFkOSPggkG8YxjCZo7m", // password123
   },
   {
     id: "u-agent-1",
     email: "agent@demo.com",
     name: "Alex Wagner",
     role: "agent",
-    passwordHash: "$2b$10$Ac01w1j4Te0B4kw9hZBu.uO0O1LpE17Tpkf41..ogDUckHOd.G2Pe", // Agent123!
+    passwordHash: "$2b$10$JiYqLRjWMTHGoWJnqBEHUeLMm756zJsdrioFkOSPggkG8YxjCZo7m", // password123
   },
 ];
 
