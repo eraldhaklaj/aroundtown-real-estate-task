@@ -3,7 +3,10 @@ import { z } from "zod";
 const EnvSchema = z.object({
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
   PORT: z.coerce.number().int().positive().default(3001),
-  ANTHROPIC_API_KEY: z.string().min(1, "ANTHROPIC_API_KEY is required"),
+  ANTHROPIC_API_KEY: z
+    .string("ANTHROPIC_API_KEY is missing")
+    .trim()
+    .min(1, "ANTHROPIC_API_KEY is missing. Get a key at https://console.anthropic.com/settings/keys"),
   // Q&A: fast, cheap default model plus a stronger fallback (errors, very long listings).
   QA_MODEL: z.string().min(1).default("claude-haiku-4-5-20251001"),
   QA_FALLBACK_MODEL: z.string().min(1).default("claude-sonnet-5"),
