@@ -7,7 +7,7 @@ A small, responsive web app for browsing Berlin property listings and asking an 
 You need Node.js 20.19 or newer.
 
 ```bash
-cp .env.example .env        # add your ANTHROPIC_API_KEY and any random 32+ character JWT_SECRET
+cp .env.example .env        # then add your ANTHROPIC_API_KEY
 npm install && npm run dev
 ```
 
