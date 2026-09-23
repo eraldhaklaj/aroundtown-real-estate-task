@@ -1,12 +1,14 @@
 import type { NextFunction, Request, Response } from "express";
 import { log } from "../log.js";
 
-/** An error whose message is safe to show to the client. */
+/** An error whose message is safe to show to the client. `code` lets the client react programmatically. */
 export class HttpError extends Error {
   status: number;
-  constructor(status: number, message: string) {
+  code?: string;
+  constructor(status: number, message: string, code?: string) {
     super(message);
     this.status = status;
+    this.code = code;
   }
 }
 
@@ -18,17 +20,19 @@ export function notFound(_req: Request, res: Response) {
 export function errorHandler(err: unknown, req: Request, res: Response, _next: NextFunction) {
   let status = 500;
   let message = "Something went wrong. Please try again.";
+  let code: string | undefined;
 
   if (err instanceof HttpError) {
     status = err.status;
     message = err.message;
+    code = err.code;
   } else if (isClientError(err)) {
     // body-parser errors (malformed JSON, payload too large) carry a 4xx status.
     status = err.status;
     message = status === 413 ? "Request body too large" : "Malformed request";
   }
 
-  if (status >= 500) {
+  if (status >= 500 && !(err instanceof HttpError)) {
     log.error("http.unhandled_error", {
       method: req.method,
       path: req.path,
@@ -40,7 +44,7 @@ export function errorHandler(err: unknown, req: Request, res: Response, _next: N
     res.end();
     return;
   }
-  res.status(status).json({ error: message });
+  res.status(status).json(code ? { error: message, code } : { error: message });
 }
 
 function isClientError(err: unknown): err is { status: number } {

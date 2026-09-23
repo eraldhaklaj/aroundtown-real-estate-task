@@ -2,6 +2,7 @@ import type Anthropic from "@anthropic-ai/sdk";
 import { Router, type Response } from "express";
 import { anthropic, describeAiError, FALLBACK_OPTIONS, MODEL, publicAiErrorMessage } from "../ai/client.js";
 import { GENERATED_DRAFT_JSON_SCHEMA, LISTING_GENERATOR_SYSTEM_PROMPT, propertyQaSystemPrompt } from "../ai/prompts.js";
+import { consumeFreeQuestion, refundFreeQuestion } from "../data/anonQuota.js";
 import { findListing } from "../data/store.js";
 import { log } from "../log.js";
 import { requireRole } from "../middleware/auth.js";
@@ -20,12 +21,21 @@ function sendEvent(res: Response, event: StreamEvent) {
 /**
  * Property Q&A. Streams the answer as Server-Sent Events.
  * The listing is loaded server-side from the id; the client only sends the question and recent history.
+ * Signed-in users ask freely (rate-limited); guests get one free question, then must sign in.
  */
 aiRouter.post("/listings/:id/ask", aiLimiter, async (req, res) => {
   const listingId = parse(ListingIdSchema, req.params.id);
   const { question, history } = parse(AskSchema, req.body);
   const listing = findListing(listingId);
   if (!listing) throw new HttpError(404, "Listing not found");
+
+  // Guests must present an existing "a" cookie (one issued on this request doesn't count),
+  // and the question is reserved before calling the model so parallel requests can't overspend.
+  const guestId = req.user ? null : req.anon!.id;
+  if (guestId && (req.anon!.isNew || !consumeFreeQuestion(guestId))) {
+    throw new HttpError(401, "You've used your free question. Sign in to keep asking.", "login_required");
+  }
+  const who = req.user?.id ?? guestId!;
 
   const messages: Anthropic.Beta.BetaMessageParam[] = [...history, { role: "user", content: question }];
 
@@ -61,7 +71,7 @@ aiRouter.post("/listings/:id/ask", aiLimiter, async (req, res) => {
     }
     const final = await stream.finalMessage();
     log.info("ai.ask", {
-      userId: req.user!.id,
+      caller: who,
       listingId,
       model: final.model,
       stopReason: final.stop_reason,
@@ -75,10 +85,11 @@ aiRouter.post("/listings/:id/ask", aiLimiter, async (req, res) => {
     }
   } catch (err) {
     if (clientGone) {
-      log.info("ai.ask_cancelled", { userId: req.user!.id, listingId });
+      log.info("ai.ask_cancelled", { caller: who, listingId });
       return;
     }
-    log.error("ai.ask_failed", { userId: req.user!.id, listingId, ...describeAiError(err) });
+    if (guestId) refundFreeQuestion(guestId);
+    log.error("ai.ask_failed", { caller: who, listingId, ...describeAiError(err) });
     sendEvent(res, { type: "error", message: publicAiErrorMessage(err) });
   } finally {
     res.end();

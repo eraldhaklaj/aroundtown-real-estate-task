@@ -1,8 +1,9 @@
 import bcrypt from "bcryptjs";
 import { Router } from "express";
+import { freeQuestionsLeft } from "../data/anonQuota.js";
 import { findUserByEmail } from "../data/users.js";
 import { log } from "../log.js";
-import { clearSession, issueSession, requireAuth, toPublicUser } from "../middleware/auth.js";
+import { clearUserSession, issueUserSession, toPublicUser } from "../middleware/auth.js";
 import { loginLimiter } from "../middleware/rateLimit.js";
 import { LoginSchema, parse } from "../validation.js";
 
@@ -22,16 +23,22 @@ authRouter.post("/login", loginLimiter, async (req, res) => {
     return;
   }
 
-  issueSession(res, user);
+  issueUserSession(res, user);
   log.info("auth.login", { userId: user.id });
   res.json({ user: toPublicUser(user) });
 });
 
+// Logging out only clears the user cookie; the guest cookie "a" stays, so its used quota isn't reset.
 authRouter.post("/logout", (_req, res) => {
-  clearSession(res);
+  clearUserSession(res);
   res.status(204).end();
 });
 
-authRouter.get("/me", requireAuth, (req, res) => {
-  res.json({ user: req.user });
+/** Who is calling: a signed-in user, or a guest and how many free AI questions they have left. */
+authRouter.get("/me", (req, res) => {
+  if (req.user) {
+    res.json({ user: req.user, freeQuestionsLeft: null });
+    return;
+  }
+  res.json({ user: null, freeQuestionsLeft: freeQuestionsLeft(req.anon!.id) });
 });

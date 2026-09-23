@@ -2,10 +2,21 @@ import type { Listing, PublicUser } from "./types";
 
 export class ApiError extends Error {
   status: number;
-  constructor(status: number, message: string) {
+  /** Machine-readable reason from the server, e.g. "login_required" when a guest's free question is used up. */
+  code?: string;
+  constructor(status: number, message: string, code?: string) {
     super(message);
     this.status = status;
+    this.code = code;
   }
+}
+
+function toApiError(status: number, body: { error?: unknown; code?: unknown }, fallback: string) {
+  return new ApiError(
+    status,
+    typeof body.error === "string" ? body.error : fallback,
+    typeof body.code === "string" ? body.code : undefined,
+  );
 }
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -22,7 +33,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 
   if (res.status === 204) return undefined as T;
   const body = await res.json().catch(() => ({}));
-  if (!res.ok) throw new ApiError(res.status, typeof body.error === "string" ? body.error : "Something went wrong.");
+  if (!res.ok) throw toApiError(res.status, body, "Something went wrong.");
   return body as T;
 }
 
@@ -30,7 +41,8 @@ export const api = {
   login: (email: string, password: string) =>
     request<{ user: PublicUser }>("/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }),
   logout: () => request<void>("/auth/logout", { method: "POST" }),
-  me: () => request<{ user: PublicUser }>("/auth/me"),
+  /** Signed-in user, or `user: null` plus the guest's remaining free AI questions. */
+  me: () => request<{ user: PublicUser | null; freeQuestionsLeft: number | null }>("/auth/me"),
   listings: () => request<{ listings: Listing[] }>("/listings"),
   listing: (id: string) => request<{ listing: Listing }>(`/listings/${encodeURIComponent(id)}`),
   generateListing: (details: GenerateListingInput) =>
@@ -84,7 +96,7 @@ export async function askAboutListing(
 
   if (!res.ok || !res.body) {
     const body = await res.json().catch(() => ({}));
-    throw new ApiError(res.status, typeof body.error === "string" ? body.error : "The assistant is unavailable.");
+    throw toApiError(res.status, body, "The assistant is unavailable.");
   }
 
   const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();

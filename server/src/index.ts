@@ -6,7 +6,7 @@ import express from "express";
 import helmet from "helmet";
 import { config } from "./config.js";
 import { log } from "./log.js";
-import { requireAuth } from "./middleware/auth.js";
+import { identify } from "./middleware/auth.js";
 import { errorHandler, notFound } from "./middleware/error.js";
 import { aiRouter } from "./routes/ai.js";
 import { authRouter } from "./routes/auth.js";
@@ -21,6 +21,8 @@ app.use(
       directives: {
         "img-src": ["'self'", "data:", "https://images.unsplash.com"],
         "connect-src": ["'self'"],
+        // The demo runs over plain HTTP on localhost; enable this when served behind TLS.
+        "upgrade-insecure-requests": null,
       },
     },
   }),
@@ -28,9 +30,12 @@ app.use(
 app.use(express.json({ limit: "10kb" }));
 app.use(cookieParser());
 
+// Every API request is resolved to a signed-in user ("token" cookie) or an anonymous guest ("a" cookie).
+// Access rules live on the routes: browsing is public, AI is quota-limited for guests, agent tools need a role.
+app.use("/api", identify);
 app.use("/api/auth", authRouter);
-app.use("/api/listings", requireAuth, listingsRouter);
-app.use("/api/ai", requireAuth, aiRouter);
+app.use("/api/listings", listingsRouter);
+app.use("/api/ai", aiRouter);
 app.use("/api", notFound);
 
 // In production the API also serves the built client (same origin, so the CSP above applies).

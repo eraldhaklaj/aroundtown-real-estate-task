@@ -1,10 +1,12 @@
-import { Loader2Icon, RotateCcwIcon, SendIcon, SparklesIcon, SquareIcon } from "lucide-react";
+import { LockIcon, Loader2Icon, RotateCcwIcon, SendIcon, SparklesIcon, SquareIcon } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import { Link, useLocation } from "react-router";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
-import { askAboutListing, type ChatTurn } from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
+import { ApiError, askAboutListing, type ChatTurn } from "@/lib/api";
 import type { Listing } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -39,6 +41,11 @@ function buildHistory(messages: ChatMessage[]): ChatTurn[] {
 }
 
 export function PropertyChat({ listing }: { listing: Listing }) {
+  const { user, freeQuestionsLeft, refresh } = useAuth();
+  const location = useLocation();
+  const isGuest = !user;
+  // Guests get one free question (enforced server-side); after that the chat asks them to sign in.
+  const locked = isGuest && freeQuestionsLeft === 0;
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
@@ -57,7 +64,7 @@ export function PropertyChat({ listing }: { listing: Listing }) {
 
   async function ask(raw: string) {
     const question = raw.trim();
-    if (!question || question.length > MAX_CHARS || streaming) return;
+    if (!question || question.length > MAX_CHARS || streaming || locked) return;
 
     const history = buildHistory(messages);
     setMessages((prev) => [
@@ -82,6 +89,8 @@ export function PropertyChat({ listing }: { listing: Listing }) {
     } catch (err) {
       if (controller.signal.aborted) {
         updateLast((m) => ({ ...m, status: "stopped" }));
+      } else if (err instanceof ApiError && err.code === "login_required") {
+        updateLast((m) => ({ ...m, status: "error", content: err.message }));
       } else {
         const message = err instanceof Error ? err.message : "Something went wrong.";
         updateLast((m) => ({ ...m, status: "error", content: m.content || message }));
@@ -90,6 +99,8 @@ export function PropertyChat({ listing }: { listing: Listing }) {
     } finally {
       setStreaming(false);
       abortRef.current = null;
+      // Sync the guest's remaining free questions with the server.
+      if (isGuest) void refresh();
     }
   }
 
@@ -129,7 +140,7 @@ export function PropertyChat({ listing }: { listing: Listing }) {
             <p className="text-sm text-muted-foreground">Try one of these, or ask your own question:</p>
             <div className="flex flex-col gap-2">
               {SUGGESTIONS.map((s) => (
-                <Button key={s} variant="outline" className="h-auto justify-start py-2 text-left whitespace-normal" onClick={() => void ask(s)}>
+                <Button key={s} variant="outline" className="h-auto justify-start py-2 text-left whitespace-normal" disabled={locked} onClick={() => void ask(s)}>
                   {s}
                 </Button>
               ))}
@@ -160,32 +171,55 @@ export function PropertyChat({ listing }: { listing: Listing }) {
       </CardContent>
 
       <CardFooter className="flex-col items-stretch gap-2 border-t py-3">
-        <form onSubmit={handleSubmit} className="space-y-2">
-          <Textarea
-            value={input}
-            onChange={(e) => setInput(e.target.value.slice(0, MAX_CHARS))}
-            onKeyDown={handleKeyDown}
-            placeholder="e.g. Is the area quiet at night?"
-            maxLength={MAX_CHARS}
-            rows={2}
-            className="max-h-32 resize-none"
-            aria-label="Your question"
-          />
-          <div className="flex items-center justify-between gap-2">
-            <span className={cn("text-xs text-muted-foreground tabular-nums", remaining < 50 && "text-amber-600")}>
-              {input.length}/{MAX_CHARS}
-            </span>
-            {streaming ? (
-              <Button type="button" variant="outline" size="sm" onClick={() => abortRef.current?.abort()}>
-                <SquareIcon /> Stop
-              </Button>
-            ) : (
-              <Button type="submit" size="sm" disabled={!input.trim()}>
-                <SendIcon /> Ask
-              </Button>
-            )}
+        {locked ? (
+          <div className="space-y-3 rounded-lg bg-muted p-4 text-center">
+            <p className="flex items-center justify-center gap-2 text-sm font-medium">
+              <LockIcon className="size-4" /> You've used your free question
+            </p>
+            <p className="text-sm text-muted-foreground">Sign in to keep asking about this and every other property.</p>
+            <Button asChild className="w-full">
+              <Link to="/login" state={{ from: location.pathname }}>
+                Sign in to continue
+              </Link>
+            </Button>
           </div>
-        </form>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-2">
+            <Textarea
+              value={input}
+              onChange={(e) => setInput(e.target.value.slice(0, MAX_CHARS))}
+              onKeyDown={handleKeyDown}
+              placeholder="e.g. Is the area quiet at night?"
+              maxLength={MAX_CHARS}
+              rows={2}
+              className="max-h-32 resize-none"
+              aria-label="Your question"
+            />
+            <div className="flex items-center justify-between gap-2">
+              <span className={cn("text-xs text-muted-foreground tabular-nums", remaining < 50 && "text-amber-600")}>
+                {input.length}/{MAX_CHARS}
+              </span>
+              {streaming ? (
+                <Button type="button" variant="outline" size="sm" onClick={() => abortRef.current?.abort()}>
+                  <SquareIcon /> Stop
+                </Button>
+              ) : (
+                <Button type="submit" size="sm" disabled={!input.trim()}>
+                  <SendIcon /> Ask
+                </Button>
+              )}
+            </div>
+            {isGuest && freeQuestionsLeft !== null && (
+              <p className="text-xs text-muted-foreground">
+                Guest access: {freeQuestionsLeft} free question{freeQuestionsLeft === 1 ? "" : "s"}.{" "}
+                <Link to="/login" state={{ from: location.pathname }} className="font-medium text-foreground underline underline-offset-4">
+                  Sign in
+                </Link>{" "}
+                for unlimited questions.
+              </p>
+            )}
+          </form>
+        )}
         <p className="text-xs text-muted-foreground">AI answers can be wrong. Confirm important details with the agent.</p>
       </CardFooter>
     </Card>

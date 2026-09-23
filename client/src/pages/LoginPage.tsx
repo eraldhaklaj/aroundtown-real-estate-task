@@ -1,6 +1,6 @@
 import { HouseIcon, Loader2Icon } from "lucide-react";
 import { useState, type FormEvent } from "react";
-import { Navigate, useLocation, useNavigate } from "react-router";
+import { Link, Navigate, useLocation, useNavigate } from "react-router";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -47,7 +47,7 @@ export function LoginPage() {
             <HouseIcon className="size-5" />
           </div>
           <CardTitle className="text-xl">Sign in to KiezHomes</CardTitle>
-          <CardDescription>Browse Berlin properties and ask the AI assistant about them.</CardDescription>
+          <CardDescription>Sign in for unlimited questions to the AI property assistant.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
           <form onSubmit={handleSubmit} className="space-y-4" noValidate>
@@ -107,6 +107,12 @@ export function LoginPage() {
               ))}
             </div>
           </div>
+
+          <p className="text-center text-sm text-muted-foreground">
+            <Link to={from} className="underline underline-offset-4 hover:text-foreground">
+              Continue browsing as a guest
+            </Link>
+          </p>
         </CardContent>
       </Card>
     </div>

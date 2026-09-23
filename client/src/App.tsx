@@ -7,14 +7,15 @@ import { ListingsPage } from "@/pages/ListingsPage";
 import { LoginPage } from "@/pages/LoginPage";
 import { NotFoundPage } from "@/pages/NotFoundPage";
 
+// Browsing is public; only the agent tools are behind a login.
 function AppLayout() {
   return (
-    <ProtectedRoute>
+    <>
       <Navbar />
       <main>
         <Outlet />
       </main>
-    </ProtectedRoute>
+    </>
   );
 }
 

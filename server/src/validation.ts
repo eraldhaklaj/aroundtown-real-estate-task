@@ -8,7 +8,8 @@ export const HISTORY_MAX_MESSAGES = 6;
 export function parse<T extends z.ZodType>(schema: T, data: unknown): z.output<T> {
   const result = schema.safeParse(data);
   if (!result.success) {
-    throw new HttpError(400, result.error.issues[0]?.message ?? "Invalid request");
+    // No body means the request wasn't JSON at all; otherwise the first issue's message is safe to show.
+    throw new HttpError(400, data === undefined ? "Invalid request" : (result.error.issues[0]?.message ?? "Invalid request"));
   }
   return result.data;
 }

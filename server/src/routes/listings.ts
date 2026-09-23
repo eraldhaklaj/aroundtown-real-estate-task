@@ -5,6 +5,7 @@ import { requireRole } from "../middleware/auth.js";
 import { HttpError } from "../middleware/error.js";
 import { CreateListingSchema, ListingIdSchema, parse } from "../validation.js";
 
+// Browsing is public (guests included); creating listings is for agents only.
 export const listingsRouter = Router();
 
 listingsRouter.get("/", (_req, res) => {
