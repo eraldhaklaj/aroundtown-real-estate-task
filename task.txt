@@ -1,0 +1,81 @@
+Real Estate Property Assistant. A 2 Hour Build Challenge
+
+Overview
+
+Build a small, responsive web app for a real estate product. We care about how you think, how you scope under time pressure, and how you use AI coding tools. Ship at least one working AI feature end to end with basic security in place. Visual polish is not the goal. Clarity, a functioning core, and sound judgment are.
+
+Time budget: about 2 hours. Do not over engineer.
+
+How You Must Build It
+
+Vibe coding only. This is a mandatory constraint. You must build the entire app using AI coding tools (for example Claude, Cursor, Copilot, or similar). Drive the work through prompting rather than writing code by hand. We expect the workflow itself to be AI assisted from start to finish.
+
+• Keep a brief record of your prompting approach. A few representative prompts or a short narrative is enough.
+
+• You remain responsible for the output. Review what the AI produces, especially anything security related.
+
+What to Build
+
+A Property Listing Assistant. A simple app where a user views property listings and interacts with at least one real, working AI powered feature.
+
+Required: at least one working AI feature
+
+You must implement at least one of the following so that it genuinely runs against a real model. Everything else can be mocked.
+
+• Smart Listing Generator. The user enters a few property details (beds, baths, location, size) and the AI generates a polished listing description.
+
+• Property Q and A. The user asks free text questions about a property (for example, is this good for a family, how is the commute) and the AI answers using the listing data.
+
+• Listing Summarizer. The user pastes a long, messy listing and the AI returns a clean structured summary (price, key features, pros and cons).
+
+Implementing more than one AI feature is welcome but not required.
+
+Requirements
+
+Must have
+
+1. Clear, simple UI and UX. Functional and easy to navigate. No design polish required. Basic styling is fine.
+
+2. At least one genuinely working AI function. It must actually run (a real API call or local model). Do not fake the core.
+
+3. Everything else can be mocked. Listings, property data, images, and user accounts can be hardcoded or static.
+
+4. Responsive. The app must render and work on both mobile and desktop widths. A single fluid layout is fine.
+
+Tech stack
+
+• Your choice. Use any stack you can move fast in (for example React or Next.js, Vue, plain HTML and JS, Python with Flask, Node with Express).
+
+• Compatibility. Make sure the pieces work well together and the project runs with a single documented command. Pin or lock your dependencies.
+
+• AI provider. Any LLM API (OpenAI, Anthropic, and so on) or a local model is fine.
+
+Security: OWASP Top 10 Self Assessment
+
+Basic security is expected, not optional. Go through the OWASP Top 10:2025 categories below and address each one in your README with a short note: how your app handles it, why it is not relevant, or what you would do with more time. We are looking for awareness and sensible reasoning, not a hardened production system.
+
+
+
+At minimum, secrets must be kept out of the code (use environment variables, git ignored), the AI key must not be exposed to the browser (proxy through a small backend route), user and AI input must be validated and never rendered as raw HTML, and errors must fail safe without leaking internals.
+
+Deliverables
+
+1. Working code in a Git repo or zip, runnable from a clean checkout.
+
+2. A short README covering how to run it, which feature is the real AI one, what is mocked, and your OWASP Top 10 self assessment.
+
+3. A few sentences on how you used AI tooling to build the app, including a couple of representative prompts, and one thing you would improve with more time.
+
+How We Evaluate
+
+• Does the AI feature actually work? This matters most.
+
+• Is the UX clear, usable, and responsive across screen sizes?
+
+• Are basic security practices present and is the OWASP self assessment thoughtful?
+
+• Is the code readable and reasonably organized? It does not need to be perfect.
+
+• Did you scope sensibly for a 2 hour build, and is the work clearly AI driven?
+
+We are not judging visual design, test coverage, or production readiness. A scrappy, secure app with one solid working AI feature beats a beautiful app that does nothing. Good luck and have fun with it.
